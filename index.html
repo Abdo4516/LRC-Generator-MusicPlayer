@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <title>Lyrics Master & Generator</title>
+  <style>
+    :root {
+      --bg-color: #121212;
+      --card-bg: #1e1e1e;
+      --input-bg: #2a2a2a;
+      --accent: #1ed760;
+      --text-main: #ffffff;
+      --text-muted: #b3b3b3;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .top-bar {
+      width: 100%;
+      max-width: 1000px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .nav-buttons, .lang-buttons {
+      display: flex;
+      gap: 10px;
+    }
+
+    button {
+      background: var(--card-bg);
+      color: var(--text-main);
+      border: 1px solid #444;
+      padding: 8px 14px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: 0.2s;
+    }
+
+    button:hover {
+      background: var(--input-bg);
+    }
+
+    button.active {
+      background: var(--accent);
+      color: #000000;
+      border-color: var(--accent);
+    }
+
+    .main-container {
+      width: 100%;
+      max-width: 1000px;
+      display: none;
+      gap: 20px;
+    }
+
+    .main-container.active {
+      display: flex;
+    }
+
+    .controls-side {
+      flex: 1;
+      background: var(--card-bg);
+      padding: 20px;
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .lyrics-side {
+      flex: 1.2;
+      background: #181818;
+      padding: 20px;
+      border-radius: 12px;
+      max-height: 550px;
+      overflow-y: auto;
+      position: relative;
+    }
+
+    /* Focus / Fullscreen Mode Styles */
+    .exit-focus-btn {
+      display: none;
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 1000;
+      background: #ff4444;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    body.focus-mode .controls-side, 
+    body.focus-mode .top-bar {
+      display: none !important;
+    }
+
+    body.focus-mode .exit-focus-btn {
+      display: block;
+    }
+
+    body.focus-mode .lyrics-side {
+      width: 100%;
+      max-width: 900px;
+      max-height: 85vh;
+      font-size: 26px;
+      margin-top: 40px;
+    }
+
+    input[type="file"], textarea {
+      width: 100%;
+      box-sizing: border-box;
+      background: var(--input-bg);
+      color: var(--text-main);
+      border: 1px solid #444;
+      padding: 10px;
+      border-radius: 8px;
+    }
+
+    textarea {
+      height: 110px;
+      resize: vertical;
+    }
+
+    audio {
+      width: 100%;
+    }
+
+    .toolbar-group {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .speed-btn, .seek-btn {
+      padding: 4px 8px;
+      font-size: 12px;
+      border-radius: 6px;
+    }
+
+    /* Lyrics Display Player */
+    .line {
+      padding: 10px 14px;
+      margin: 4px 0;
+      border-radius: 6px;
+      font-size: 18px;
+      font-weight: bold;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .line:hover {
+      color: var(--text-main);
+      background-color: var(--input-bg);
+    }
+
+    .line.active {
+      color: var(--accent);
+      font-size: 22px;
+      background-color: var(--input-bg);
+    }
+
+    /* Generator Lines List */
+    .line-item {
+      padding: 8px;
+      border-bottom: 1px solid #2a2a2a;
+      color: var(--text-muted);
+    }
+
+    .line-item.done {
+      color: var(--accent);
+    }
+
+    .line-item.current {
+      background: var(--input-bg);
+      color: var(--text-main);
+      font-weight: bold;
+    }
+
+    @media (max-width: 768px) {
+      .main-container {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Exit Fullscreen Button -->
+  <button class="exit-focus-btn" id="btnExitFocus" onclick="toggleFocusMode()">✕ Exit Fullscreen</button>
+
+  <div class="top-bar">
+    <div class="nav-buttons">
+      <button id="btnPlayerView" class="active" onclick="switchTab('player')">Player</button>
+      <button id="btnGenView" onclick="switchTab('generator')">LRC Generator</button>
+    </div>
+    <div class="lang-buttons">
+      <button onclick="setLanguage('en')">English</button>
+      <button onclick="setLanguage('ar')">العربية</button>
+      <button onclick="setLanguage('ru')">Русский</button>
+    </div>
+  </div>
+
+  <!-- TAB 1: PLAYER -->
+  <div id="playerTab" class="main-container active">
+    <div class="controls-side">
+      <h3 id="txtPlayerTitle">Synced Lyrics Player</h3>
+      
+      <label id="txtSelectAudio">1. Select Audio File (MP3):</label>
+      <input type="file" id="audioInputPlayer" accept="audio/*">
+      
+      <audio id="audioPlayer" controls></audio>
+
+      <!-- Speed & Seek Controls -->
+      <div class="toolbar-group">
+        <span id="txtSpeedLabel" style="font-size: 12px; color: var(--text-muted);">Speed:</span>
+        <button class="speed-btn" onclick="setSpeed('player', 0.5)">0.5x</button>
+        <button class="speed-btn" onclick="setSpeed('player', 0.75)">0.75x</button>
+        <button class="speed-btn" onclick="setSpeed('player', 1)">1.0x</button>
+        <button class="speed-btn" onclick="setSpeed('player', 1.25)">1.25x</button>
+      </div>
+
+      <div class="toolbar-group">
+        <button class="seek-btn" onclick="seekAudio('player', -5)">-5s ⏪</button>
+        <button class="seek-btn" onclick="seekAudio('player', 5)">⏩ +5s</button>
+        <button id="btnLoopLine" onclick="toggleLoopLine()">🔁 Repeat Line: OFF</button>
+      </div>
+
+      <label id="txtPasteLrc">2. Paste LRC Text (with timestamps):</label>
+      <textarea id="lrcInput" placeholder="[00:12.50] ..."></textarea>
+
+      <div class="toolbar-group">
+        <button id="btnLoadLyrics" onclick="loadLyrics()" style="background: var(--accent); color: #000; flex: 1;">Load Lyrics</button>
+        <button id="btnFocusMode" onclick="toggleFocusMode()">📺 Fullscreen</button>
+      </div>
+    </div>
+
+    <div class="lyrics-side" id="lyricsContainer">
+      <p id="txtPlayerEmpty" style="color: var(--text-muted);">Load audio and lyrics to start...</p>
+    </div>
+  </div>
+
+  <!-- TAB 2: GENERATOR -->
+  <div id="genTab" class="main-container">
+    <div class="controls-side">
+      <h3 id="txtGenTitle">LRC File Generator</h3>
+
+      <label id="txtGenSelectAudio">1. Select Audio File (MP3):</label>
+      <input type="file" id="audioInputGen" accept="audio/*">
+      <audio id="audioGenPlayer" controls></audio>
+
+      <!-- Speed Controls for Generator -->
+      <div class="toolbar-group">
+        <span id="txtGenSpeedLabel" style="font-size: 12px; color: var(--text-muted);">Speed:</span>
+        <button class="speed-btn" onclick="setSpeed('gen', 0.5)">0.5x</button>
+        <button class="speed-btn" onclick="setSpeed('gen', 0.75)">0.75x</button>
+        <button class="speed-btn" onclick="setSpeed('gen', 1)">1.0x</button>
+      </div>
+
+      <label id="txtGenPasteRaw">2. Paste Plain Lyrics (line by line):</label>
+      <textarea id="rawLyrics" placeholder="Lyrics text..."></textarea>
+
+      <div class="toolbar-group">
+        <button id="btnStartTagging" onclick="startTagging()" style="background: var(--accent); color: #000; flex: 1;">Start Syncing</button>
+        <button id="btnReloadTagging" onclick="reloadTagging()" style="background: #ff4444; color: #fff;">🔄 Reset Sync (Reload)</button>
+      </div>
+      
+      <p id="txtSpaceHint" style="font-size: 13px; color: var(--accent); margin: 0;">
+        💡 Press (Spacebar) while playing to tag each line!
+      </p>
+    </div>
+
+    <div class="lyrics-side">
+      <h4 id="txtTaggingProgress" style="margin-top:0;">Sync Progress:</h4>
+      <div id="linesDisplay" style="max-height: 200px; overflow-y: auto; margin-bottom: 15px;"></div>
+
+      <h4 id="txtGenResult">3. Final LRC Result:</h4>
+      <textarea id="finalLrc" readonly placeholder="[00:00.00] ..."></textarea>
+      
+      <div class="toolbar-group" style="margin-top: 10px;">
+        <button id="btnCopyResult" onclick="copyResult()" style="flex: 1;">Copy Final LRC</button>
+        <button id="btnDownloadLrc" onclick="downloadLrcFile()" style="background: #333; color: var(--accent);">💾 Download .lrc File</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  let currentLang = 'en';
+  let isLineLooping = false;
+  let activeLyricIndex = -1;
+
+  const i18n = {
+    en: {
+      btnPlayerView: "Player",
+      btnGenView: "LRC Generator",
+      txtPlayerTitle: "Synced Lyrics Player",
+      txtSelectAudio: "1. Select Audio File (MP3):",
+      txtSpeedLabel: "Speed:",
+      txtPasteLrc: "2. Paste LRC Text (with timestamps):",
+      btnLoadLyrics: "Load Lyrics",
+      txtPlayerEmpty: "Load audio and lyrics to start...",
+      txtGenTitle: "LRC File Generator",
+      txtGenSelectAudio: "1. Select Audio File (MP3):",
+      txtGenSpeedLabel: "Speed:",
+      txtGenPasteRaw: "2. Paste Plain Lyrics (line by line):",
+      btnStartTagging: "Start Syncing",
+      btnReloadTagging: "🔄 Reset Sync (Reload)",
+      txtSpaceHint: "💡 Press (Spacebar) while playing to tag each line!",
+      txtTaggingProgress: "Sync Progress:",
+      txtGenResult: "3. Final LRC Result:",
+      btnCopyResult: "Copy Final LRC",
+      btnDownloadLrc: "💾 Download .lrc File",
+      btnFocusMode: "📺 Fullscreen",
+      btnExitFocus: "✕ Exit Fullscreen",
+      btnLoopLineOff: "🔁 Repeat Line: OFF",
+      btnLoopLineOn: "🔁 Repeat Line: ON",
+      dir: "ltr"
+    },
+    ar: {
+      btnPlayerView: "المشغل",
+      btnGenView: "المولد (LRC)",
+      txtPlayerTitle: "مشغل الأغاني المترابط",
+      txtSelectAudio: "1. اختر ملف الصوت (MP3):",
+      txtSpeedLabel: "السرعة:",
+      txtPasteLrc: "2. ألصق نص ملف LRC (مع التوقيت):",
+      btnLoadLyrics: "تحميل الكلمات",
+      txtPlayerEmpty: "قم بتحميل الصوت والكلمات للبدء...",
+      txtGenTitle: "مولد ملفات LRC",
+      txtGenSelectAudio: "1. اختر ملف الصوت (MP3):",
+      txtGenSpeedLabel: "السرعة:",
+      txtGenPasteRaw: "2. ألصق الكلمات العادية (سطر بسطر):",
+      btnStartTagging: "بدء التوقيت",
+      btnReloadTagging: "🔄 إعادة التوقيت (Reload)",
+      txtSpaceHint: "💡 اضغط على زر (Space / المسطرة) أثناء التشغيل لتحديد التوقيت!",
+      txtTaggingProgress: "الكلمات أثناء التوقيت:",
+      txtGenResult: "3. النتيجة النهائية (LRC):",
+      btnCopyResult: "نسخ النص النهائي",
+      btnDownloadLrc: "💾 تنزيل ملف .lrc",
+      btnFocusMode: "📺 ملء الشاشة",
+      btnExitFocus: "✕ الخروج من ملء الشاشة",
+      btnLoopLineOff: "🔁 تكرار السطر: إيقاف",
+      btnLoopLineOn: "🔁 تكرار السطر: مفعل",
+      dir: "rtl"
+    },
+    ru: {
+      btnPlayerView: "Плеер",
+      btnGenView: "Генератор LRC",
+      txtPlayerTitle: "Синхронный плеер",
+      txtSelectAudio: "1. Выберите аудиофайл (MP3):",
+      txtSpeedLabel: "Скорость:",
+      txtPasteLrc: "2. Вставьте текст LRC (с таймингом):",
+      btnLoadLyrics: "Загрузить текст",
+      txtPlayerEmpty: "Загрузите аудио и текст для начала...",
+      txtGenTitle: "Генератор LRC файлов",
+      txtGenSelectAudio: "1. Выберите аудиофайл (MP3):",
+      txtGenSpeedLabel: "Скорость:",
+      txtGenPasteRaw: "2. Вставьте текст песни (построчно):",
+      btnStartTagging: "Начать разметку",
+      btnReloadTagging: "🔄 Сброс разметки (Reload)",
+      txtSpaceHint: "💡 Нажимайте (Пробел) во время воспроизведения!",
+      txtTaggingProgress: "Прогресс разметки:",
+      txtGenResult: "3. Готовый LRC результат:",
+      btnCopyResult: "Скопировать LRC",
+      btnDownloadLrc: "💾 Скачать .lrc файл",
+      btnFocusMode: "📺 Экран",
+      btnExitFocus: "✕ Выйти из экрана",
+      btnLoopLineOff: "🔁 Повтор строки: ВЫКЛ",
+      btnLoopLineOn: "🔁 Повтор строки: ВКЛ",
+      dir: "ltr"
+    }
+  };
+
+  function setLanguage(lang) {
+    currentLang = lang;
+    const data = i18n[lang];
+    document.documentElement.dir = data.dir;
+    document.documentElement.lang = lang;
+
+    Object.keys(data).forEach(key => {
+      if (key !== 'dir' && key !== 'btnLoopLineOff' && key !== 'btnLoopLineOn') {
+        const el = document.getElementById(key);
+        if (el) el.innerText = data[key];
+      }
+    });
+
+    updateLoopBtnText();
+  }
+
+  function updateLoopBtnText() {
+    const btn = document.getElementById('btnLoopLine');
+    if (isLineLooping) {
+      btn.innerText = i18n[currentLang].btnLoopLineOn;
+      btn.style.color = "var(--accent)";
+    } else {
+      btn.innerText = i18n[currentLang].btnLoopLineOff;
+      btn.style.color = "var(--text-main)";
+    }
+  }
+
+  function switchTab(tab) {
+    document.getElementById('playerTab').classList.remove('active');
+    document.getElementById('genTab').classList.remove('active');
+    document.getElementById('btnPlayerView').classList.remove('active');
+    document.getElementById('btnGenView').classList.remove('active');
+
+    if (tab === 'player') {
+      document.getElementById('playerTab').classList.add('active');
+      document.getElementById('btnPlayerView').classList.add('active');
+    } else {
+      document.getElementById('genTab').classList.add('active');
+      document.getElementById('btnGenView').classList.add('active');
+    }
+  }
+
+  /* Audio Controls */
+  function setSpeed(type, speed) {
+    const player = type === 'player' ? audioPlayer : audioGenPlayer;
+    player.playbackRate = speed;
+  }
+
+  function seekAudio(type, seconds) {
+    const player = type === 'player' ? audioPlayer : audioGenPlayer;
+    player.currentTime = Math.max(0, player.currentTime + seconds);
+  }
+
+  function toggleLoopLine() {
+    isLineLooping = !isLineLooping;
+    updateLoopBtnText();
+  }
+
+  function toggleFocusMode() {
+    document.body.classList.toggle('focus-mode');
+  }
+
+  /* LocalStorage Auto-Save & Default Settings */
+  window.addEventListener('DOMContentLoaded', () => {
+    setLanguage('en');
+    if (localStorage.getItem('saved_lrc')) {
+      document.getElementById('lrcInput').value = localStorage.getItem('saved_lrc');
+    }
+    if (localStorage.getItem('saved_raw')) {
+      document.getElementById('rawLyrics').value = localStorage.getItem('saved_raw');
+    }
+  });
+
+  /* --- PLAYER CODE --- */
+  const audioInputPlayer = document.getElementById('audioInputPlayer');
+  const audioPlayer = document.getElementById('audioPlayer');
+  const lrcInput = document.getElementById('lrcInput');
+  const lyricsContainer = document.getElementById('lyricsContainer');
+  let lyricsData = [];
+
+  audioInputPlayer.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) audioPlayer.src = URL.createObjectURL(file);
+  });
+
+  function parseLRC(lrcText) {
+    const lines = lrcText.split('\n');
+    const result = [];
+    const timeRegex = /\[(\d{2}):(\d{2})\.(\d{2,3})\]/;
+
+    lines.forEach(line => {
+      const match = timeRegex.exec(line);
+      if (match) {
+        const minutes = parseInt(match[1]);
+        const seconds = parseInt(match[2]);
+        const milliseconds = parseInt(match[3]);
+        const timeInSeconds = minutes * 60 + seconds + (milliseconds / (match[3].length === 3 ? 1000 : 100));
+        const text = line.replace(timeRegex, '').trim();
+        if (text) result.push({ time: timeInSeconds, text });
+      }
+    });
+    return result.sort((a, b) => a.time - b.time);
+  }
+
+  function loadLyrics() {
+    localStorage.setItem('saved_lrc', lrcInput.value);
+    lyricsData = parseLRC(lrcInput.value);
+    lyricsContainer.innerHTML = '';
+
+    if (lyricsData.length === 0) {
+      lyricsContainer.innerHTML = `<p style="color: #ff5555;">${i18n[currentLang].txtPlayerEmpty}</p>`;
+      return;
+    }
+
+    lyricsData.forEach((item, index) => {
+      const div = document.createElement('div');
+      div.className = 'line';
+      div.innerText = item.text;
+      div.addEventListener('click', () => {
+        audioPlayer.currentTime = item.time;
+        audioPlayer.play();
+      });
+      lyricsContainer.appendChild(div);
+    });
+  }
+
+  audioPlayer.addEventListener('timeupdate', () => {
+    const currentTime = audioPlayer.currentTime;
+    let newIndex = -1;
+
+    for (let i = 0; i < lyricsData.length; i++) {
+      if (currentTime >= lyricsData[i].time) newIndex = i;
+      else break;
+    }
+
+    if (isLineLooping && activeLyricIndex !== -1 && newIndex > activeLyricIndex) {
+      if (lyricsData[activeLyricIndex]) {
+        audioPlayer.currentTime = lyricsData[activeLyricIndex].time;
+        return;
+      }
+    }
+
+    activeLyricIndex = newIndex;
+    const elements = lyricsContainer.getElementsByClassName('line');
+    Array.from(elements).forEach((el, index) => {
+      if (index === activeLyricIndex) {
+        if (!el.classList.contains('active')) {
+          el.classList.add('active');
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      } else {
+        el.classList.remove('active');
+      }
+    });
+  });
+
+  /* --- GENERATOR CODE --- */
+  const audioInputGen = document.getElementById('audioInputGen');
+  const audioGenPlayer = document.getElementById('audioGenPlayer');
+  const rawLyrics = document.getElementById('rawLyrics');
+  const linesDisplay = document.getElementById('linesDisplay');
+  const finalLrc = document.getElementById('finalLrc');
+
+  let genLines = [];
+  let genIndex = 0;
+  let taggedResults = [];
+
+  audioInputGen.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) audioGenPlayer.src = URL.createObjectURL(file);
+  });
+
+  function startTagging() {
+    localStorage.setItem('saved_raw', rawLyrics.value);
+    const text = rawLyrics.value.trim();
+    if (!text) return;
+
+    genLines = text.split('\n').filter(l => l.trim() !== '');
+    genIndex = 0;
+    taggedResults = [];
+    finalLrc.value = '';
+    renderGenLines();
+  }
+
+  function reloadTagging() {
+    genIndex = 0;
+    taggedResults = [];
+    finalLrc.value = '';
+    audioGenPlayer.currentTime = 0;
+    audioGenPlayer.pause();
+    renderGenLines();
+  }
+
+  function renderGenLines() {
+    linesDisplay.innerHTML = '';
+    genLines.forEach((line, idx) => {
+      const div = document.createElement('div');
+      div.className = 'line-item';
+      if (idx < genIndex) div.classList.add('done');
+      if (idx === genIndex) div.classList.add('current');
+      div.innerText = (taggedResults[idx] ? taggedResults[idx].timeStr + ' ' : '') + line;
+      linesDisplay.appendChild(div);
+    });
+
+    const currentEl = linesDisplay.querySelector('.current');
+    if (currentEl) currentEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    const millis = Math.floor((seconds % 1) * 100);
+    return `[${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${String(millis).padStart(2, '0')}]`;
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && document.activeElement !== rawLyrics && document.activeElement !== lrcInput) {
+      if (document.getElementById('genTab').classList.contains('active')) {
+        e.preventDefault();
+        if (genIndex < genLines.length && !audioGenPlayer.paused) {
+          const timeStr = formatTime(audioGenPlayer.currentTime);
+          taggedResults.push({ timeStr, text: genLines[genIndex] });
+          genIndex++;
+          finalLrc.value = taggedResults.map(item => `${item.timeStr} ${item.text}`).join('\n');
+          renderGenLines();
+        }
+      }
+    }
+  });
+
+  function copyResult() {
+    finalLrc.select();
+    document.execCommand('copy');
+  }
+
+  function downloadLrcFile() {
+    const text = finalLrc.value;
+    if (!text) return;
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'lyrics.lrc';
+    link.click();
+  }
+</script>
+</body>
+</html>
